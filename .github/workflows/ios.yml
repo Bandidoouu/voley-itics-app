@@ -1,0 +1,63 @@
+name: iOS
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Elegir Xcode
+        run: |
+          ls /Applications | grep Xcode
+          sudo xcode-select -s /Applications/Xcode_16.4.app
+          xcodebuild -version
+
+      - name: Pruebas del código compartido en iOS
+        run: ./gradlew :shared:iosSimulatorArm64Test --console=plain
+
+      - name: Generar proyecto Xcode
+        run: |
+          brew install xcodegen
+          cd iosApp && xcodegen generate
+
+      - name: Compilar app iOS
+        run: |
+          xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,name=iPhone 16" -derivedDataPath iosApp/build \
+            CODE_SIGNING_ALLOWED=NO build-for-testing
+
+      - name: Probar en simulador de iPhone
+        run: |
+          xcrun simctl boot "iPhone 16" || true
+          xcrun simctl bootstatus "iPhone 16" -b
+          mkdir -p capturas
+          xcrun simctl io booted recordVideo --codec=h264 --force capturas/video_ios.mp4 &
+          GRABADORA=$!
+          sleep 3
+          TEST_RUNNER_CAPTURAS="$PWD/capturas" xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp \
+            -destination "platform=iOS Simulator,name=iPhone 16" -derivedDataPath iosApp/build \
+            CODE_SIGNING_ALLOWED=NO test-without-building || FALLO=1
+          kill -INT $GRABADORA
+          sleep 5
+          exit ${FALLO:-0}
+
+      - name: Empaquetar app de simulador
+        if: always()
+        run: |
+          cd iosApp/build/Build/Products/Debug-iphonesimulator && zip -qr "$GITHUB_WORKSPACE/capturas/Voley-itics-simulador.zip" iosApp.app || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-capturas
+          path: capturas
