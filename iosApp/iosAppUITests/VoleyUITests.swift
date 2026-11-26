@@ -30,18 +30,22 @@ final class VoleyUITests: XCTestCase {
 
     func toca(_ texto: String, exacto: Bool = false, file: StaticString = #filePath, line: UInt = #line) {
         let e = elemento(texto, exacto: exacto)
-        XCTAssertTrue(e.waitForExistence(timeout: 20), "No encontré: \(texto)", file: file, line: line)
+        if !e.waitForExistence(timeout: 20) { print(app.debugDescription) }
+        XCTAssertTrue(e.exists, "No encontré: \(texto)", file: file, line: line)
         e.tap()
         sleep(1)
     }
 
     func escribe(_ campo: String, _ valor: String) {
-        let filtro = NSPredicate(format: "label CONTAINS %@ OR placeholderValue CONTAINS %@ OR value CONTAINS %@", campo, campo, campo)
-        let e = app.descendants(matching: .any).matching(filtro).matching(NSPredicate(format: "elementType == %d OR elementType == %d",
-            XCUIElement.ElementType.textField.rawValue, XCUIElement.ElementType.secureTextField.rawValue)).firstMatch
-        XCTAssertTrue(e.waitForExistence(timeout: 20), "No encontré el campo: \(campo)")
+        let filtro = NSPredicate(format: "label == %@ OR placeholderValue == %@ OR value == %@", campo, campo, campo)
+        let e = app.descendants(matching: .any).matching(filtro).firstMatch
+        if !e.waitForExistence(timeout: 20) {
+            print(app.debugDescription)
+            XCTFail("No encontré el campo: \(campo)")
+        }
         e.tap()
-        e.typeText(valor)
+        sleep(1)
+        app.typeText(valor)
     }
 
     func testRecorridoCompleto() {
